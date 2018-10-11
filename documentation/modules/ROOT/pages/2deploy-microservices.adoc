@@ -4,38 +4,16 @@ include::_attributes.adoc[]
 [#deploycustomer]
 == Deploy customer
 
-Make sure you are logged in
+
+먼저, 소스코드를 내려받습니다.
 
 [source,bash]
 ----
-oc whoami
-or
-kubectl config current-context
-----
-
-and you have setup the project/namespace
-
-[source,bash]
-----
-oc new-project tutorial
-or
-kubectl create namespace tutorial
-kubectl config set-context $(kubectl config current-context) --namespace=tutorial
-
-oc adm policy add-scc-to-user privileged -z default -n tutorial
-----
-
-Then clone the git repository
-
-[source,bash]
-----
-git clone https://github.com/redhat-developer-demos/istio-tutorial
+git clone https://github.com/TheOpenCloudEngine/istio-tutorial
 cd istio-tutorial
 ----
 
-Start deploying the microservice projects, starting with customer
-
-Make sure `istioctl` is in your `PATH`:
+시작전에 먼저, `istioctl` 이 `PATH`에 걸려있는지 확인합니다:
 
 [source,bash]
 ----
@@ -48,91 +26,68 @@ GolangVersion: go1.10.1
 BuildStatus: Clean
 ----
 
-=== Customer build using Docker daemon 
+=== Customer 모듈의 빌드와 패키징
 
-NOTE: Your very first Docker build will take a bit of time as it downloads all the layers. Subsequent rebuilds of the Docker image, updating only the microservice layer will be very fast.
 
 [source,bash]
 ----
 cd customer/java/springboot
 mvn clean package
-docker build -t example/customer .
+docker build -t gcr.io/uengine-istio-test/customer:v1 .
 docker images | grep customer
 ----
 
-Now let's deploy the customer pod with its sidecar
+그런후에 Google Container Registry에 등록합니다.
 
 [source,bash]
 ----
-oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
-oc create -f ../../kubernetes/Service.yml -n tutorial
-
-or
-
 kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
 kubectl create -f ../../kubernetes/Service.yml -n tutorial
 ----
 
-=== Customer build using OpenShift S2I strategy
 
-[source, bash]
+=== Customer 를 노출
+
+다음의 명령으로 해당 워크로드(pod)가 정상적으로 기동되는지 확인합니다:
 ----
-cd customer/java/springboot
-oc new-app --name=customer --context-dir=customer/java/springboot -e JAEGER_SERVICE_NAME=customer JAEGER_ENDPOINT=http://jaeger-collector.istio-system.svc:14268/api/traces JAEGER_PROPAGATION=b3 JAEGER_SAMPLER_TYPE=const JAEGER_SAMPLER_PARAM=1 JAVA_OPTIONS='-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true' fabric8/s2i-java~https://github.com/redhat-developer-demos/istio-tutorial -o yaml  > customer.yml
-oc apply -f <(istioctl kube-inject -f customer.yml) -n tutorial
-oc delete svc/customer -n tutorial; oc create -f ../../kubernetes/Service.yml -n tutorial
-oc logs bc/customer -f -n tutorial
+kubectl get po -w
 ----
 
-=== Expose customer
+상태 (status) 플래그가 `Running` 이면서 `2/2` pods 로 `Ready` 컬럼에 표시되면 정상적으로 sidecar 와 main 워크로드가 기동되었음을 확인하게 됩니다. 그러면. `Ctrl+C`를 입력하여 상태보기에서 빠져나옵니다.
 
-Since the `customer` service is the one our users will interact with, let's add an OpenShift Route that exposes that endpoint.
+그런후, Customer 모듈을 테스트합니다:
 
 [source,bash]
 ----
-oc expose service customer -n tutorial
-
-oc get route -n tutorial
-oc get pods -w -n tutorial
-
-or
-
-kubectl get route -o=jsonpath='{.items[0].spec.host}'
-kubectl get pods -w
+kubectl proxy # kube 프록시를 오픈합니다. 기본 8001번 포트로 열리게 됩니다.
+curl http://..../api/v1/proxy/namespaces/default/services/customer:8080 # proxy 를 통하여 접속합니다. .... 부분은 콘솔 상단의 '웹 미리보기'에서 설정하여 열린 주소를 확인하면 됩니다.
 ----
 
-IMPORTANT: If your pod fails with `ImagePullBackOff`, it's possible that your current terminal isn't using the proper Docker Environment. See link:#setup-environment[Setup environment].
-
-Wait until the status is `Running` and there are `2/2` pods in the `Ready` column. To exit, press `Ctrl+C`
-
-Then test the customer endpoint
-
-[source,bash]
-----
-curl customer-tutorial.$(minishift ip).nip.io
-----
-
-You should see the following error because the services `preference` and `recommendation` are not yet deployed.
+마찬가지로 `preference` 와 `recommendation` 서비스 또한 연결해야 합니다. 연결하지 않으면 해당 타켓 마이크로서비스 가 서비스되지 않아 호출의 문제가 생기게 됩니다:
 
 ----
 customer => I/O error on GET request for "http://preference:8080": preference; nested exception is java.net.UnknownHostException: preference
 ----
 
-Also review the logs
+내부의 로그를 살펴보면,
 
 [source,bash]
 ----
 stern customer -c customer
+
+or
+
+kubectl logs (customer pod 명) -c customer
 ----
 
-You should see a stacktrace containing this cause:
+내부의 스택트레이스를 확인할 수 있습니다:
 
 [source,bash]
 ----
 org.springframework.web.client.ResourceAccessException: I/O error on GET request for "http://preference:8080": preference; nested exception is java.net.UnknownHostException: preference
 ----
 
-Back to the main istio-tutorial directory
+메인 디렉토리로 이동후,
 
 [source,bash]
 ----
@@ -140,7 +95,7 @@ cd ../../..
 ----
 
 [#deploypreference]
-== Deploy preference
+== preference 서비스 배포
 
 === Preference build using Docker daemon
 
@@ -148,112 +103,12 @@ cd ../../..
 ----
 cd preference/java/springboot
 mvn clean package
-docker build -t example/preference:v1 .
+docker build -t gcr.io/uengine-istio-test/preference:v1 .
 docker images | grep preference
 
-oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
-oc create -f ../../kubernetes/Service.yml
-
-or
-
 kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
 kubectl create -f ../../kubernetes/Service.yml
 ----
-
-=== Preference build using OpenShift S2I strategy
-
-[source, bash]
-----
-cd preference/java/springboot
-oc new-app -l app=preference,version=v1 --name=preference-v1 --context-dir=preference/java/springboot -e JAEGER_SERVICE_NAME=preference JAEGER_ENDPOINT=http://jaeger-collector.istio-system.svc:14268/api/traces JAEGER_PROPAGATION=b3 JAEGER_SAMPLER_TYPE=const JAEGER_SAMPLER_PARAM=1 JAVA_OPTIONS='-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true' fabric8/s2i-java~https://github.com/redhat-developer-demos/istio-tutorial -o yaml  > preference.yml
-oc apply -f <(istioctl kube-inject -f preference.yml) -n tutorial
-oc delete svc/preference-v1 -n tutorial; oc create -f ../../kubernetes/Service.yml -n tutorial
-oc logs bc/preference-v1 -f -n tutorial
-----
-
-=== Wait preference to be deployed
-
-[source, bash]
-----
-oc get pods -w -n tutorial
-or
-kubectl get pods -w
-----
-
-Wait until the status is `Running` and there are `2/2` pods in the `Ready` column. To exit, press `Ctrl+C`
-
-[source,bash]
-----
-curl customer-tutorial.$(minishift ip).nip.io
-----
-
-It will respond with an error since the service `recommendation` is not yet deployed.
-
-NOTE: We could make this a bit more resilient in a future iteration of this tutorial
-
-[source,bash]
-----
-customer => 503 preference => I/O error on GET request for "http://recommendation:8080": recommendation; nested exception is java.net.UnknownHostException: recommendation
-----
-
-and check out the logs
-
-[source,bash]
-----
-stern preference -c preference
-----
-
-You should see a stacktrace containing this cause:
-
-[source,bash]
-----
-org.springframework.web.client.ResourceAccessException: I/O error on GET request for "http://recommendation:8080": recommendation; nested exception is java.net.UnknownHostException: recommendation
-----
-
-Back to the main istio-tutorial directory
-
-[source,bash]
-----
-cd ../../..
-----
-
-[#deployrecommendation]
-== Deploy recommendation
-
-IMPORTANT: The tag `v1` at the end of the image name matters. We will be creating a `v2` version of `recommendation` later in this tutorial. Having both a `v1` and `v2` version of the `recommendation` code will allow us to exercise some interesting aspects of Istio's capabilities.
-
-=== Recommendation build using Docker daemon
-
-[source,bash]
-----
-cd recommendation/java/vertx
-mvn clean package
-docker build -t example/recommendation:v1 .
-docker images | grep recommendation
-
-oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
-oc create -f ../../kubernetes/Service.yml
-oc get pods -w
-
-or 
-
-kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
-kubectl create -f ../../kubernetes/Service.yml
-kubectl get pods -w
-----
-
-=== Recommendation build using OpenShift S2I strategy
-
-[source, bash]
-----
-cd recommendation/java/vertx
-oc new-app -l app=recommendation,version=v1 --name=recommendation-v1 --context-dir=recommendation/java/vertx JAVA_OPTIONS='-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true' fabric8/s2i-java~https://github.com/redhat-developer-demos/istio-tutorial -o yaml  > recommendation.yml
-oc apply -f <(istioctl kube-inject -f recommendation.yml) -n tutorial
-oc delete svc/recommendation-v1 -n tutorial; oc create -f ../../kubernetes/Service.yml -n tutorial
-oc logs bc/recommendation-v1 -f -n tutorial
-----
-
-=== Wait recommendation to be deployed
 
 Wait until the status is `Running` and there are `2/2` pods in the `Ready` column. To exit, press `Ctrl+C`
 
@@ -269,19 +124,6 @@ it should now return
 customer => preference => recommendation v1 from '99634814-sf4cl': 1
 ----
 
-and you can monitor the `recommendation` logs with
-
-[source,bash]
-----
-stern recommendation -c recommendation
-----
-
-Back to the main `istio-tutorial` directory
-
-[source,bash]
-----
-cd ../../..
-----
 
 [#redeployingcode]
 == Updating Redeploying Code
