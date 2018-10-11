@@ -35,13 +35,13 @@ IMPORTANT: We have a 2nd Deployment to manage the v2 version of recommendation.
 
 [source,bash]
 ----
-oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment-v2.yml) -n tutorial
-oc get pods -w -n tutorial
+oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment-v2.yml) 
+oc get pods -w 
 
 or
 
-kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment-v2.yml) -n tutorial
-kubectl get pods -w -n tutorial
+kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment-v2.yml)
+kubectl get pods -w
 ----
 
 === OpenShift S2I strategy (if you DON'T have access to Docker daemon)
@@ -50,10 +50,10 @@ kubectl get pods -w -n tutorial
 ----
 mvn clean package -f recommendation/java/vertx
 oc new-app -l app=recommendation,version=v2 --name=recommendation-v2 --context-dir=recommendation/java/vertx -e JAEGER_SERVICE_NAME=recommendation JAEGER_ENDPOINT=http://jaeger-collector.istio-system.svc:14268/api/traces JAEGER_PROPAGATION=b3 JAEGER_SAMPLER_TYPE=const JAEGER_SAMPLER_PARAM=1 JAVA_OPTIONS='-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true' fabric8/s2i-java~https://github.com/redhat-developer-demos/istio-tutorial -o yaml  > recommendation-v2.yml
-oc apply -f <(istioctl kube-inject -f recommendation-v2.yml) -n tutorial
-oc cancel-build bc/recommendation-v2 -n tutorial
-oc delete svc/recommendation-v2 -n tutorial
-oc start-build recommendation-v2 --from-dir=. --follow -n tutorial
+oc apply -f <(istioctl kube-inject -f recommendation-v2.yml)
+oc cancel-build bc/recommendation-v2
+oc delete svc/recommendation-v2
+oc start-build recommendation-v2 --from-dir=. --follow
 ----
 
 === Wait for v2 to be deployed
@@ -96,9 +96,9 @@ The default Kubernetes/OpenShift behavior is to round-robin load-balance across 
 
 [source,bash]
 ----
-oc scale --replicas=2 dc/recommendation-v2 -n tutorial
+oc scale --replicas=2 dc/recommendation-v2
 or
-kubectl scale --replicas=2 deployment/recommendation-v2 -n tutorial
+kubectl scale --replicas=2 deployment/recommendation-v2
 ----
 
 Now, you will see two requests into the v2 and one for v1.
@@ -114,9 +114,9 @@ Scale back to a single replica of the recommendation-v2 Deployment
 
 [source,bash]
 ----
-oc scale --replicas=1 dc/recommendation-v2 -n tutorial
+oc scale --replicas=1 dc/recommendation-v2
 or
-kubectl scale --replicas=1 deployment/recommendation-v2 -n tutorial
+kubectl scale --replicas=1 deployment/recommendation-v2
 ----
 
 and back to the main directory
@@ -136,8 +136,8 @@ From the main istio-tutorial directory,
 
 [source,bash]
 ----
-istioctl create -f istiofiles/destination-rule-recommendation-v1-v2.yml -n tutorial
-istioctl create -f istiofiles/virtual-service-recommendation-v2.yml -n tutorial
+istioctl create -f istiofiles/destination-rule-recommendation-v1-v2.yml
+istioctl create -f istiofiles/virtual-service-recommendation-v2.yml
 
 curl customer-tutorial.$(minishift ip).nip.io
 ----
@@ -151,11 +151,11 @@ Note: "replace" instead of "create" since we are overlaying the previous rule
 
 [source,bash]
 ----
-istioctl replace -f istiofiles/virtual-service-recommendation-v1.yml -n tutorial
+istioctl replace -f istiofiles/virtual-service-recommendation-v1.yml
 
 istioctl get virtualservice
 
-istioctl get virtualservice -o yaml -n tutorial
+istioctl get virtualservice -o yaml
 ----
 
 [#alltorecommendationv1v2]
@@ -165,7 +165,7 @@ By simply removing the rule
 
 [source,bash]
 ----
-istioctl delete -f istiofiles/virtual-service-recommendation-v1.yml -n tutorial
+istioctl delete -f istiofiles/virtual-service-recommendation-v1.yml
 ----
 
 and you should see the default behavior of load-balancing between v1 and v2
@@ -182,9 +182,9 @@ Canary Deployment scenario: push v2 into the cluster but slowly send end-user tr
 
 [source,bash]
 ----
-$ oc get pods -l app=recommendation -n tutorial
+$ oc get pods -l app=recommendation
 or
-$ kubectl get pods -l app=recommendation -n tutorial
+$ kubectl get pods -l app=recommendation
 
 NAME                                  READY     STATUS    RESTARTS   AGE
 recommendation-v1-3719512284-7mlzw   2/2       Running   6          2h
@@ -195,7 +195,7 @@ Create the `virtualservice` that will send 90% of requests to v1 and 10% to v2
 
 [source,bash]
 ----
-istioctl create -f istiofiles/virtual-service-recommendation-v1_and_v2.yml -n tutorial
+istioctl create -f istiofiles/virtual-service-recommendation-v1_and_v2.yml
 ----
 
 and send in several requests:
@@ -209,15 +209,15 @@ In another terminal, change the mixture to be 75/25
 
 [source,bash]
 ----
-istioctl replace -f istiofiles/virtual-service-recommendation-v1_and_v2_75_25.yml -n tutorial
+istioctl replace -f istiofiles/virtual-service-recommendation-v1_and_v2_75_25.yml
 ----
 
 Clean up
 
 [source,bash]
 ----
-istioctl delete -f istiofiles/virtual-service-recommendation-v1_and_v2_75_25.yml -n tutorial
-istioctl delete -f istiofiles/destination-rule-recommendation-v1-v2.yml -n tutorial
+istioctl delete -f istiofiles/virtual-service-recommendation-v1_and_v2_75_25.yml
+istioctl delete -f istiofiles/destination-rule-recommendation-v1-v2.yml
 ----
 
 or you can run:
