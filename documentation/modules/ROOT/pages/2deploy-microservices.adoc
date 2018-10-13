@@ -34,6 +34,7 @@ BuildStatus: Clean
 cd customer/java/springboot
 mvn clean package
 docker build -t gcr.io/uengine-istio-test/customer:v1 .
+docker push gcr.io/uengine-istio-test/customer:v1
 docker images | grep customer
 ----
 
@@ -41,8 +42,8 @@ docker images | grep customer
 
 [source,bash]
 ----
-kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
-kubectl create -f ../../kubernetes/Service.yml -n tutorial
+kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml)
+kubectl create -f ../../kubernetes/Service.yml
 ----
 
 
