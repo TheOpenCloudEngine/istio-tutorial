@@ -9,6 +9,10 @@ https://cloud.google.com 로 접속하신 후, "무료사용"을 클릭합니다
 1년 300달러 한도의 무료계정이 제공되는데, 가입시 카드번호를 요구합니다. 이는 사용자와 카드결제 가능 확인을 위함이며, 실제로 결제되지 않으니 무료사용을 추천합니다.
 상단의 shell 버튼을 클릭하여 접속하면 대부분의 CLI 툴이 모두 설치된 환경을 웹브라우저에서 사용가능합니다.
 
+기본 GKE 가입을 성공한 후에 다음의 링크의 설명에 따라 Istio 를 설치하고 기본적인 Istio 사용법을 숙지하시기 바랍니다:
+
+https://github.com/TheOpenCloudEngine/uEngine-cloud/wiki/Istio-%EC%8B%A4%EC%8A%B5-%EC%8A%A4%ED%81%AC%EB%A6%BD%ED%8A%B8
+
 [#prerequisite]
 == 혹은 직접 로컬에 구성
 
