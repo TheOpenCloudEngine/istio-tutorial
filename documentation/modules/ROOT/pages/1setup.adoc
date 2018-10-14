@@ -10,7 +10,7 @@ https://cloud.google.com 로 접속하신 후, "무료사용"을 클릭합니다
 상단의 shell 버튼을 클릭하여 접속하면 대부분의 CLI 툴이 모두 설치된 환경을 웹브라우저에서 사용가능합니다.
 
 [#prerequisite]
-== Prerequisite CLI tools
+== 혹은 직접 로컬에 구성
 
 You will need in this tutorial:
 
