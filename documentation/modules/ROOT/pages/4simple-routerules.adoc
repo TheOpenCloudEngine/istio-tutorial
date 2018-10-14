@@ -1,21 +1,20 @@
-= Simple Route Rules
+= 기초적인 Routing Rule 처리
 include::_attributes.adoc[]
 
-For this use case, we need to create a modified version of Recommendations
+하나이상의 버전을 상황에 따라 번갈아가며 라우팅하는 Canary Deploy 의 시나리오를 위해 v2 recommendation 서비스를 디플로이 합니다. 이를 위해서 다음과 같이 기존 recommendation 서비스의 코드 일부를 수정합니다:
 
 [#deployrecommendationv2]
-== Create recommendation:v2
+==  recommendation:v2 의 생성
 
-We can experiment with Istio controlling traffic by making a change to `RecommendationVerticle.java` like the following and creating a "v2" docker image.
+ Istio 의 트래픽 컨트롤 기능을 확인하기 위하여 `RecommendationVerticle.java` 를 다음과 같이 수정하고 도커이미지를 빌드/배포합니다.
 
 [source,java]
 ----
 private static final String RESPONSE_STRING_FORMAT = "recommendation v2 from '%s': %d\n";
 ----
 
-The "v2" tag during the Docker build is significant.
+이때, "v2"로 도커이미지를 빌드할 때  버전을 명시하는 것이 중요합니다.
 
-There is also a second `deployment.yml` file to label things correctly
 
 === Docker build (if you have access to Docker daemon)
 
@@ -24,41 +23,25 @@ There is also a second `deployment.yml` file to label things correctly
 cd recommendation/java/vertx
 mvn clean package
 
-docker build -t example/recommendation:v2 .
+docker build -t gcr.io/uengine-istio-test/recommendation:v2 .
 
 docker images | grep recommendation
-example/recommendation                  v2                  c31e399a9628        5 seconds ago       438MB
-example/recommendation                  v1                  f072978d9cf6        8 minutes ago      438MB
+recommendation                  v2                  c31e399a9628        5 seconds ago       438MB
+recommendation                  v1                  f072978d9cf6        8 minutes ago      438MB
 ----
 
-IMPORTANT: We have a 2nd Deployment to manage the v2 version of recommendation. 
+그리고 docker image v2 용 Deployment 설정인 Deployment-v2.yml 을 디플로이하는 것이 중요합니다.  
 
 [source,bash]
 ----
-oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment-v2.yml) 
-oc get pods -w 
-
-or
-
 kubectl apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment-v2.yml)
 kubectl get pods -w
 ----
 
-=== OpenShift S2I strategy (if you DON'T have access to Docker daemon)
 
-[source, bash]
-----
-mvn clean package -f recommendation/java/vertx
-oc new-app -l app=recommendation,version=v2 --name=recommendation-v2 --context-dir=recommendation/java/vertx -e JAEGER_SERVICE_NAME=recommendation JAEGER_ENDPOINT=http://jaeger-collector.istio-system.svc:14268/api/traces JAEGER_PROPAGATION=b3 JAEGER_SAMPLER_TYPE=const JAEGER_SAMPLER_PARAM=1 JAVA_OPTIONS='-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true' fabric8/s2i-java~https://github.com/redhat-developer-demos/istio-tutorial -o yaml  > recommendation-v2.yml
-oc apply -f <(istioctl kube-inject -f recommendation-v2.yml)
-oc cancel-build bc/recommendation-v2
-oc delete svc/recommendation-v2
-oc start-build recommendation-v2 --from-dir=. --follow
-----
+=== 버전 2가 디플로이 될 때를 기다립니다.
 
-=== Wait for v2 to be deployed
-
-Wait for those pods to show "2/2", the istio-proxy/envoy sidecar is part of that pod
+해당 pod가 istio side car 와 함께 기동되었는지 확인하기 위하여 READY 컬럼이 "2/2" 로 표시되는지 확인합니다:
 
 [source,bash]
 ----
@@ -69,18 +52,18 @@ recommendation-v1-60483540-9snd9     2/2       Running   0          12m
 recommendation-v2-2815683430-vpx4p   2/2       Running   0         15s
 ----
 
-and test the customer endpoint
+그런후에 customer 를 테스트합니다:
 
 [source,bash]
 ----
-curl customer-tutorial.$(minishift ip).nip.io
+curl <service ip>
 ----
 
 you likely see "customer =&gt; preference =&gt; recommendation v1 from '99634814-d2z2t': 3", where '99634814-d2z2t' is the pod running v1 and the 3 is basically the number of times you hit the endpoint.
 
 [source]
 ----
-curl customer-tutorial.$(minishift ip).nip.io
+curl <service ip>
 ----
 
 you likely see "customer =&gt; preference =&gt; recommendation v2 from '2819441432-5v22s': 1" as by default you get round-robin load-balancing when there is more than one Pod behind a Service
@@ -92,16 +75,14 @@ Send several requests to see their responses:
 ./scripts/run.sh
 ----
 
-The default Kubernetes/OpenShift behavior is to round-robin load-balance across all available pods behind a single Service. Add another replica of recommendation-v2 Deployment.
+기본 Kubernetes 의 동작은 라운드-로빈 방식으로 pod들에 번갈아가며 워크로드를 배분합니다. 여기에 추가적으로 recommendation-v2 deployment 에 대한 인스턴스를 늘여줍니다.
 
 [source,bash]
 ----
-oc scale --replicas=2 dc/recommendation-v2
-or
 kubectl scale --replicas=2 deployment/recommendation-v2
 ----
 
-Now, you will see two requests into the v2 and one for v1.
+라운드로빈이기 때문에, v1 에 한번, v2에 두번씩 번갈아가며 배분됩니다.
 
 [source,bash]
 ----
@@ -110,44 +91,29 @@ customer => preference => recommendation v2 from '99634814-sf4cl': 37
 customer => preference => recommendation v2 from '99634814-sf4cl': 38
 ----
 
-Scale back to a single replica of the recommendation-v2 Deployment
-
-[source,bash]
-----
-oc scale --replicas=1 dc/recommendation-v2
-or
-kubectl scale --replicas=1 deployment/recommendation-v2
-----
-
-and back to the main directory
-
-[source,bash]
-----
-cd ../../..
-----
 
 [#istiorouting]
-== Changing Istio Routings
+== Istio 라우팅 설정의 변경
 
 [#alltorecommendationv2]
-=== All users to recommendation:v2
+=== 모든 유저가 recommendation v2를 사용하도록
 
-From the main istio-tutorial directory,
+istio-tutorial 메인 디렉토리로 이동한 후,
 
 [source,bash]
 ----
 istioctl create -f istiofiles/destination-rule-recommendation-v1-v2.yml
 istioctl create -f istiofiles/virtual-service-recommendation-v2.yml
 
-curl customer-tutorial.$(minishift ip).nip.io
+curl <service url>
 ----
 
-you should only see v2 being returned
+v2 만이 표시되는 것을 확인 할 수 있습니다.
 
 [#alltorecommendationv1]
-=== All users to recommendation:v1
+=== 모든 유저를 v1만 사용하도록 
 
-Note: "replace" instead of "create" since we are overlaying the previous rule
+Note: "create"보다는 "replace" 를 사용해야 기존 설정을 변경할 수 있습니다. 
 
 [source,bash]
 ----
@@ -159,31 +125,23 @@ istioctl get virtualservice -o yaml
 ----
 
 [#alltorecommendationv1v2]
-=== All users to recommendation v1 and v2
+=== 모든 유조를 recommendation v1 과 v2를 배분하여 라우팅
 
-By simply removing the rule
+그냥 기존 룰을 제거하면, 기본 라운드-로빈 방식으로 다시 전환됩니다:
 
 [source,bash]
 ----
 istioctl delete -f istiofiles/virtual-service-recommendation-v1.yml
 ----
 
-and you should see the default behavior of load-balancing between v1 and v2
-
-[source,bash]
-----
-curl customer-tutorial.$(minishift ip).nip.io
-----
 
 [#canarydeploymentrecommendation]
-=== Canary deployment: Split traffic between v1 and v2
+=== Canary deployment: 트래픽을 v1과 v2로 배분하기
 
 Canary Deployment scenario: push v2 into the cluster but slowly send end-user traffic to it, if you continue to see success, continue shifting more traffic over time
 
 [source,bash]
 ----
-$ oc get pods -l app=recommendation
-or
 $ kubectl get pods -l app=recommendation
 
 NAME                                  READY     STATUS    RESTARTS   AGE
