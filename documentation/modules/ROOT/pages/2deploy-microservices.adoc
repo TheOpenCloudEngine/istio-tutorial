@@ -96,6 +96,10 @@ cd ../../..
 ----
 
 [#deploypreference]
-== preference 서비스 배포
+== preference, recommend 서비스 들의 배포
 
 동일한 방법으로 prefernce 와 recommendation 서비스를 배포합니다.
+
+
+
+
