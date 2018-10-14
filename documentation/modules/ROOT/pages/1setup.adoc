@@ -1,6 +1,14 @@
 = Setup
 include::_attributes.adoc[]
 
+설치 방법은 크게 GKE (Google Kubernetes Engine)을 이용한 설치(설치라기 보다는 가입만으로 이미 도구가 모두 설치된 환경을 사용)와 직접 로컬에 CLI들과 kubernetes 를 설치하는 방법이 있습니다
+
+[#GKE 를 사용]
+
+https://cloud.google.com 로 접속하신 후, "무료사용"을 클릭합니다.
+1년 300달러 한도의 무료계정이 제공되는데, 가입시 카드번호를 요구합니다. 이는 사용자와 카드결제 가능 확인을 위함이며, 실제로 결제되지 않으니 무료사용을 추천합니다.
+상단의 shell 버튼을 클릭하여 접속하면 대부분의 CLI 툴이 모두 설치된 환경을 웹브라우저에서 사용가능합니다.
+
 [#prerequisite]
 == Prerequisite CLI tools
 
